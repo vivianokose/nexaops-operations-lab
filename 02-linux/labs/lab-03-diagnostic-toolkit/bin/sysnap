@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# sysnap: a one-screen snapshot of the server's current state.
+# Usage: sysnap [--no-color]
+
+set -euo pipefail
+
+# Color helpers: bold/dim for headers, unless --no-color or output is not a terminal
+if [[ "${1:-}" == "--no-color" ]] || [[ ! -t 1 ]]; then
+  BOLD=""; DIM=""; RESET=""
+else
+  BOLD=$'\e[1m'; DIM=$'\e[2m'; RESET=$'\e[0m'
+fi
+
+section() {
+  printf "\n%s== %s ==%s\n" "$BOLD" "$1" "$RESET"
+}
+
+section "Host"
+hostnamectl | sed 's/^/  /'
+
+section "Uptime and load"
+uptime | sed 's/^/  /'
+
+section "Memory (MB)"
+free -m | sed 's/^/  /'
+
+section "Top 5 CPU consumers"
+ps -eo pid,user,%cpu,%mem,comm --sort=-%cpu | head -n 6 | sed 's/^/  /'
+
+section "Top 5 memory consumers"
+ps -eo pid,user,%cpu,%mem,comm --sort=-%mem | head -n 6 | sed 's/^/  /'
+
+section "Disk usage"
+df -h --output=target,fstype,size,used,avail,pcent | grep -vE 'tmpfs|squashfs|overlay|efivarfs' | sed 's/^/  /'
+
+section "Listening ports"
+ss -tulnp 2>/dev/null | sed 's/^/  /'
+
+section "Last 5 logins"
+last -n 5 | head -n 5 | sed 's/^/  /'
+
+section "Failed login attempts (today)"
+# grep returns non-zero when it finds no matches, which is fine here (zero is good news).
+# The '|| true' keeps set -e from treating "no failed logins" as a script failure.
+failed_count=$(journalctl _COMM=sshd --since today 2>/dev/null | grep -ci "failed password" || true)
+printf "  %s\n" "$failed_count"
+
+printf "\n%sRun %sjournalctl -p err -b%s for boot errors.%s\n" "$DIM" "$BOLD" "$DIM" "$RESET"

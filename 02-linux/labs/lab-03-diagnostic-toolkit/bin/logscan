@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# logscan: search journalctl for a pattern with context.
+# Usage: logscan <pattern> [--since "1 hour ago"] [--service NAME]
+
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: logscan <pattern> [--since 'time'] [--service NAME]" >&2
+  exit 1
+fi
+
+PATTERN="$1"; shift
+SINCE="1 hour ago"
+SERVICE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --since)   SINCE="$2"; shift 2;;
+    --service) SERVICE="$2"; shift 2;;
+    *) echo "Unknown arg: $1" >&2; exit 2;;
+  esac
+done
+
+if [[ -n "$SERVICE" ]]; then
+  journalctl -u "$SERVICE" --since "$SINCE" --no-pager | grep -C 2 -i --color=auto "$PATTERN"
+else
+  journalctl --since "$SINCE" --no-pager | grep -C 2 -i --color=auto "$PATTERN"
+fi

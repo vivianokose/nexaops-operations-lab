@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# netcheck: quick connectivity and DNS sanity check.
+# Usage: netcheck
+
+set -euo pipefail
+
+targets=("1.1.1.1" "8.8.8.8" "github.com" "registry.npmjs.org" "auth.docker.io")
+
+echo "Ping check:"
+for t in "${targets[@]}"; do
+  if ping -c 1 -W 2 "$t" >/dev/null 2>&1; then
+    printf "  OK  %s\n" "$t"
+  else
+    printf "  XX  %s\n" "$t"
+  fi
+done
+
+echo
+echo "DNS resolution for github.com:"
+dig +short github.com | sed 's/^/  /'
+
+echo
+echo "Outbound HTTPS to github.com:"
+curl -sI --max-time 5 https://github.com | head -n 1 | sed 's/^/  /'

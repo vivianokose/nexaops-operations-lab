@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# diskmap: find the top N largest items at a given path.
+# Usage: diskmap [path] [--top N]
+
+set -euo pipefail
+
+PATH_TO_SCAN="${1:-/}"
+TOP=20
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --top) TOP="$2"; shift 2;;
+    *) shift;;
+  esac
+done
+
+echo "Scanning $PATH_TO_SCAN for largest items (top $TOP). This may take a moment."
+sudo du -ah "$PATH_TO_SCAN" 2>/dev/null \
+  | sort -rh \
+  | head -n "$TOP" \
+  | awk '{printf "%-10s %s\n", $1, $2}'
