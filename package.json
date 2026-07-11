@@ -1,0 +1,30 @@
+{
+  "name": "nexaops-operations-lab",
+  "version": "1.0.0",
+  "description": "> A production-grade run through modern DevOps practice. Built module by module, each shipping a real artifact, a runbook, screenshots, and a writeup.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vivianokose/nexaops-operations-lab.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vivianokose/nexaops-operations-lab/issues"
+  },
+  "homepage": "https://github.com/vivianokose/nexaops-operations-lab#readme",
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "husky": "^9.1.7"
+  }
+}
