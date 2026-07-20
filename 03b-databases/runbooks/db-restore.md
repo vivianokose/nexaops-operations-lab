@@ -14,7 +14,7 @@ A backup you have never restored is a wish, not a backup. This procedure has bee
 ## Environment
 - Postgres 16 (alpine) running in Docker via compose
 - Database: lumberyard_dev, user: lumberyard
-- Stack lives in 04-databases/labs/lab-01-stack
+- Stack lives in 03b-databases/labs/lab-01-stack
 
 ---
 
