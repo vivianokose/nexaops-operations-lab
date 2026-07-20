@@ -23,3 +23,7 @@ __pycache__/
 node_modules/
 # Local logs
 *.log
+
+# Database backups never belong in git
+*.dump
+*.sql.gz
