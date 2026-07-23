@@ -27,3 +27,9 @@ node_modules/
 # Database backups never belong in git
 *.dump
 *.sql.gz
+
+# Build output: reproducible from source, never committed
+target/
+*.jar
+*.tgz
+*.class
