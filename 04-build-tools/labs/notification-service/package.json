@@ -1,0 +1,19 @@
+{
+  "name": "nexaops-notification-service",
+  "version": "1.0.0",
+  "description": "Sends email and SMS notifications for NexaOps Ltd",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test src/*.test.js"
+  },
+  "keywords": ["nexaops", "notifications", "devops"],
+  "author": "NexaOps Platform Team",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
