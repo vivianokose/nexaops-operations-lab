@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexaops-report-service"
+version = "1.0.0"
+description = "Generates uptime reports for NexaOps Ltd"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Vivian Okose" }]
+license = { text = "MIT" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

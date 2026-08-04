@@ -1,0 +1,10 @@
+# Python build artifacts (regenerable, not committed)
+labs/report-service/dist/
+labs/report-service/build/
+labs/report-service/src/*.egg-info/
+__pycache__/
+*.pyc
+
+# Credentials, never commit
+.pypirc
+.npmrc

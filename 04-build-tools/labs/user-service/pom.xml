@@ -9,7 +9,7 @@
   <!-- Project identity: what this project is called and its version -->
   <groupId>com.nexaops</groupId>
   <artifactId>user-service</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <packaging>jar</packaging>
 
   <name>NexaOps User Service</name>
@@ -46,4 +46,14 @@
     </plugins>
   </build>
 
+<distributionManagement>
+    <repository>
+      <id>nexus-releases</id>
+      <url>http://32.196.216.219:8081/repository/maven-releases/</url>
+    </repository>
+    <snapshotRepository>
+      <id>nexus-snapshots</id>
+      <url>http://32.196.216.219:8081/repository/maven-snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
 </project>
