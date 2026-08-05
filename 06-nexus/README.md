@@ -15,7 +15,7 @@ finished artifacts, caches copies of the public libraries your builds depend on,
 gives you one controlled place to version and audit everything. Nexus is the registry I
 ran here.
 
-![Architecture of the Nexus registry](06-nexus/architecture.svg)
+![Architecture of the Nexus registry](architecture.png)
 
 *Your laptop pushes and pulls artifacts through Nexus. Hosted repos hold your own work;
 proxy repos cache the public registries so builds keep working even when the internet
@@ -147,7 +147,7 @@ catastrophe.*
 - `scripts/nexus-inventory.sh` — REST API inventory script
 - `SECURITY.md` — the security decisions and how credentials are handled
 - `retro.md` — what I learned
-- `architecture.svg` — the diagram above
+- `architecture.png` — the diagram above
 - `screenshots/` — 19 screenshots documenting each step
 
 ## Key takeaways
