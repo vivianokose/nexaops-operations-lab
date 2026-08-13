@@ -1,0 +1,15 @@
+{
+  "name": "swiftmove-app",
+  "version": "1.0.0",
+  "description": "SwiftMove Logistics delivery tracking app",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "author": "Vivian Okose",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "mysql2": "^3.11.0"
+  }
+}

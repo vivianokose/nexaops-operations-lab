@@ -1,0 +1,24 @@
+# The NAIVE Dockerfile - deliberately bad, so we can see the problems.
+# We will replace this with a proper multi-stage build in the next step.
+
+# Start from a FULL Node image (this alone is ~1GB - it includes a whole
+# build toolchain, package managers, compilers, none of which we need to RUN the app).
+FROM node:18
+
+# Work inside /app in the box.
+WORKDIR /app
+
+# Copy EVERYTHING at once (including files we do not need).
+COPY . .
+
+# Install ALL dependencies (this pulls in a lot).
+RUN npm install
+
+# The app listens on port 3000.
+EXPOSE 3000
+
+# Note: no USER line, so this runs as ROOT inside the container. Bad practice.
+# Note: no healthcheck. Bad practice.
+
+# Start the app.
+CMD ["node", "src/server.js"]

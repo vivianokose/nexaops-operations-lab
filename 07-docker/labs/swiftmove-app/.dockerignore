@@ -1,0 +1,10 @@
+# Keep these OUT of the build context (faster builds, smaller images, no secrets leaked).
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+Dockerfile.naive
+README.md
+*.md
+screenshots
