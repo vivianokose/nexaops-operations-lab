@@ -26,6 +26,7 @@ Here is how I answered each one, and the full walkthrough underneath.
 keeps data, and the same image pushed to Docker Hub and Nexus. The bottom strip is the
 naive-to-production hardening pipeline.*
 
+
 ## The app: SwiftMove Logistics
 
 A small delivery-tracking app. A Node.js web server reads deliveries from a MySQL database
