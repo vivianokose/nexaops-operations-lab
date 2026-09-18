@@ -1,0 +1,5 @@
+resources:
+  - ../../base
+namespace: clearops-prod
+patches:
+  - path: replicas.yaml
