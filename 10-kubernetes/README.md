@@ -1,209 +1,188 @@
-# Module 9: Cloud Fundamentals on AWS
+# Module 10: Container Orchestration with Kubernetes
 
-StackForge is a SaaS company with 500 paying customers, and everything runs on one server.
-The web app, the MySQL database, and the folder where customer uploads land, all on a single
-box with a single public IP. When that server restarted after an update, 500 businesses
-could not log in for eleven minutes.
+ClearOps runs three containerised services, a frontend, an API, and a Redis cache, as bare
+Docker containers on a single VM. When the VM restarts, all three go down together. When
+the API gets busy, someone SSHes in and manually starts another container. It works until
+nobody is watching, which at 2am is always.
 
-The worse problem was quieter. The login logs showed thousands of automated attempts every
-night. Those bots were not just knocking on the app. The database sat at the same address,
-one weak password away from every customer record.
-
-This module rebuilds that single server as a real production architecture: isolated
-networking, redundancy across two data centres, a managed database that nothing on the
-internet can route to, and permissions granted without a single stored credential.
+This module rebuilds that setup on Kubernetes: a cluster that restarts crashed containers
+on its own, scales the API under load without a human, and exposes each service exactly as
+far as it should go, the frontend to the world, the API and Redis to nothing outside the
+cluster.
 
 ![Architecture](architecture.png)
-*The finished architecture. Customers reach only the load balancer; app servers sit behind
-it; the database sits in private subnets no internet route reaches.*
+*Three tiers on one cluster. The frontend is the only thing reachable from outside; the API
+and Redis are internal, with the control plane keeping the whole thing matching its
+description.*
 
-## The network
+## The shift: describe, don't instruct
 
-The foundation is a VPC, a private network inside AWS with its own address range. Inside it,
-four subnets across two availability zones: a public subnet in each zone for things that
-must face customers, and a private subnet in each for things that must not.
+Every tool up to now took commands. `docker run`, `git push`. Each does a thing once, and
+if it fails or stops later, that is your problem to notice.
 
-The distinction between public and private is worth stating precisely, because it is a
-common interview question and it is not a setting. A subnet is public because its route
-table contains a route to the internet gateway. The private subnets have no such route, so
-the database is not guarded, it is unreachable. Its outbound traffic goes through a NAT
-gateway instead, which allows requests out and replies back but permits nothing to initiate
-a connection inward.
+Kubernetes takes a description of what should be true, written in YAML, and works
+continuously to keep reality matching it. You do not tell it to start a container. You tell
+it "I want two API pods," and its control plane makes that true and keeps it true. A pod
+dies, a replacement appears. A node reboots, the pods come back. Nobody is paged, because
+noticing is no longer a human job.
 
-![VPC created](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-002-vpc-created.png)
-*The VPC resource map: four subnets across two availability zones, one internet gateway, one
-NAT gateway, and a free S3 gateway endpoint.*
+The practical consequence catches everyone out: you cannot fix things by hand. Delete a pod
+and Kubernetes immediately recreates it, because the description still says two. To change
+what is running, you change the description.
 
-![Subnets](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-003-subnets-four.png)
-*Two public and two private subnets, one pair per availability zone.*
+## The building blocks
 
-![Route tables](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-004-route-tables.png)
-*The public route table points 0.0.0.0/0 at the internet gateway. The private one points it
-at the NAT gateway instead. That single difference is what public and private mean.*
+**Pods** wrap the containers. Nearly always one container each. The thing to know is that
+they are disposable: replaced constantly, each with a new name and IP, and anything written
+inside one is gone when it goes.
 
-## Security groups, and why they reference each other
+**Deployments** hold the desired replica count and manage the pods to match it. You never
+create pods directly; you create a Deployment and let it do the work.
 
-Network position controls what is reachable at all. Security groups control who may talk to
-what within that. Three groups form a chain:
+**Services** give a stable address in front of pods whose own addresses keep changing. The
+frontend reaches the API at the name `clearops-api`, not an IP, because the cluster runs
+its own DNS. Configuration stops containing addresses entirely, `REDIS_HOST` is just
+`redis`, forever.
 
-- The load balancer accepts HTTP and HTTPS from anywhere. It is the public face.
-- The app servers accept port 3000 **only from the load balancer's security group**.
-- The database accepts port 3306 **only from the app servers' security group**.
+**Labels and selectors** are the glue. A Service does not name the pods it fronts; it says
+"anything labelled `app: redis`," and the control plane keeps finding whatever currently
+matches. Get the label and the selector out of step and a Deployment creates pods it then
+cannot find, which is the most common beginner mistake in the whole system.
 
-The detail that matters: those rules name security groups, not IP addresses. Add a third app
-server tomorrow, or replace a dead one with a different IP, and the database rule still
-works, because it grants access to anything wearing the app-server badge. Rules that
-hardcode IPs break the first time infrastructure changes, and infrastructure always changes.
+![Cluster up](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-001-cluster-up.png)
+*The cluster running. The pods in kube-system are the control plane itself, running as pods
+like everything else.*
 
-![Security groups](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-005-security-groups.png)
-*Three security groups, each trusting only the tier in front of it.*
+![All resources](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-006-all-resources.png)
+*The three services with the exposure each needs: frontend on a NodePort, API and Redis
+ClusterIP (internal only).*
 
-I tested this before building the load balancer by trying to reach an app server directly on
-port 3000 from my browser. It timed out. Not refused, timed out, meaning the packets were
-silently dropped rather than rejected. That distinction is a useful troubleshooting signal:
-a timeout usually means a firewall or missing route, a refusal means you reached the machine
-but nothing was listening.
+## Self-healing
 
-## Redundancy and the load balancer
+The feature that justifies the complexity. Delete an API pod and watch what happens:
 
-Two app servers, one in each availability zone. Availability zones are physically separate
-data centres with independent power and networking, so a failure in one does not touch the
-other. Running both servers in the same zone would have been twice the cost for none of the
-protection.
+![Self-healing](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-007-self-healing.png)
+*Delete a pod and a replacement is scheduled before the old one has finished terminating.
+About twelve seconds from delete to serving traffic.*
 
-The load balancer gives customers a single address and distributes requests between the two
-servers. More importantly, it health checks each one every thirty seconds by requesting
-`/health`. Three consecutive failures and a server is pulled from rotation automatically.
-That is the eleven-minute outage solved without anyone being woken up.
+Nothing responded to the delete specifically. The control plane compared the desired count
+(2) against reality (1) on its next pass and closed the gap. In a Docker Compose setup that
+container would simply be gone until a human noticed.
 
-![EC2 instances](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-006-ec2-instances-running.png)
-*Both app servers running, one per availability zone, launched with no SSH key pair.*
+## Autoscaling
 
-![Healthy targets](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-007-target-group-healthy.png)
-*Both targets healthy. The load balancer will only send traffic to servers answering
-/health.*
+ClearOps's manual "SSH in and start another container" becomes a HorizontalPodAutoscaler:
+keep average CPU near 60%, between 2 and 6 pods.
 
-![Server A](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-008-alb-response-server-a.png)
-*A request through the load balancer, served by the first instance.*
+![HPA scaling](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-008-hpa-scaling.png)
+*Under load CPU hit 92%, and the autoscaler moved from 2 pods to 4 within seconds. It
+calculated what was needed rather than jumping to the maximum.*
 
-![Server B](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-009-alb-response-server-b.png)
-*A refresh, served by the second. Same URL, different server, and no way to reach either
-directly.*
+Scale-up is fast because being overwhelmed is urgent; scale-down waits several minutes,
+deliberately, so pods do not flap in and out on spiky traffic. It depends on the
+metrics-server for CPU data, and on the pods having resource requests set, without a
+request there is no baseline to calculate a percentage against.
 
-## Permissions without credentials
+## Config, health, and safe updates
 
-The app servers need to write files to S3. The obvious approach is to generate AWS access
-keys and put them in a config file, and it is the wrong one. That secret then lives on disk,
-usually in the repository, on every laptop that cloned it, and in the backups. It does not
-expire. Leaked AWS keys in public repositories are among the most common causes of
-compromise, and there are bots that do nothing but scan for them.
+**A ConfigMap** feeds settings into the API as environment variables, so the same image
+runs in any environment with different config.
 
-Instead, an IAM role is attached to the instances. AWS supplies temporary credentials
-automatically, rotated without anyone doing anything. There is no secret to leak, nothing to
-commit by accident, and nothing to rotate. If the instance is destroyed, the permission dies
-with it, unlike a stolen key that still works from anywhere.
+![Config from ConfigMap](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-009-configmap-env.png)
+*Settings injected from the ConfigMap, not baked into the image.*
 
-I started with the broad AWS-managed S3 policy to get moving, then replaced it with a policy
-naming exactly one bucket. Two statements are required, one for actions on the bucket itself
-and one for actions on the objects inside it, a distinction that trips up most first
-attempts at S3 policies.
+**Probes** tell Kubernetes what "working" means. A readiness probe decides whether a pod
+should receive traffic; a liveness probe decides whether a stuck pod should be killed and
+replaced. Same idea as the Module 9 load balancer health check, plus the restart behaviour.
 
-![IAM role](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-010-iam-role-policy.png)
-*The role carrying only what the servers need: SSM management, and read/write on one bucket.*
+**Rolling updates** replace pods gradually, waiting for each new one to pass its readiness
+probe before removing an old one, so there is never a gap in service. The readiness probe is
+the safety catch: if a new version never passes, the rollout stops rather than destroying
+working pods.
 
-The verification that mattered was the failure. After the swap, uploading to the named bucket
-still worked, and `aws s3 ls` returned AccessDenied, because listing every bucket in the
-account was no longer permitted. A compromised app server can now reach one bucket of assets
-and nothing else.
+![Rollout history](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-010-rollout-history.png)
+*Revision history, and a one-command rollback. Rollback adds a new revision rather than
+deleting history, and history is finite, which is why the manifest in git, not the cluster's
+memory, is the real source of truth.*
 
-## The managed database
+## State that survives
 
-The database runs on RDS rather than on an instance I maintain. AWS handles backups,
-patching, storage and hardware replacement. There is no SSH into an RDS instance, and that is
-the feature rather than a limitation: the shell existed to do maintenance work that is no
-longer mine. What you get instead is a stable endpoint, which survives hardware replacement
-and failover, so the application reconnects to the same address regardless of what happened
-underneath.
+The API is stateless and interchangeable, which is what a Deployment is built for. Redis
+holds data, and pods are disposable, so a plain Deployment loses everything on restart. I
+proved it: wrote a value, deleted the pod, and the value was gone.
 
-It sits in the private subnets with public access disabled and a security group admitting
-only the app servers.
+A StatefulSet fixes both halves. It gives the pod a stable identity (`redis-store-0`,
+always) and a PersistentVolumeClaim (storage that outlives the pod). I ran the same
+test, wrote a value, deleted the pod, and this time the pod came back with the same name,
+reattached to the same volume, and the value was still there.
 
-![RDS private](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-011-rds-private.png)
-*The database with public accessibility disabled, placed in the private subnet group.*
+![StatefulSet PVC](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-011-statefulset-pvc.png)
+*The PersistentVolumeClaim bound to the StatefulSet pod. Storage tied to a specific identity.*
 
-## Shell access with zero inbound ports
+The honest caveat, carried from Module 9: running a real replicated database in Kubernetes
+means handling leader election, replication and failover, which is genuinely hard. Most
+teams use a managed database instead.
 
-The app servers were launched with no key pair at all, and their security group has no SSH
-rule. Access is through SSM Session Manager instead, where an agent on the instance holds an
-outbound connection to AWS, and sessions are delivered back through it.
+## Network isolation
 
-The consequences are practical. There is no port 22 to scan and no key to store, copy, lose,
-or rotate. Authentication is your own IAM identity, so removing someone's AWS access locks
-them out of every server at once, and every session is logged in CloudTrail under a real
-name rather than "whoever held the key." It also reaches instances in private subnets, which
-removes the need for a bastion host entirely.
+By default every pod in a cluster can reach every other pod, in any namespace. So Redis,
+even as a ClusterIP with no external exposure, was still reachable by anything in the
+cluster. A NetworkPolicy fixes that:
 
-![Database connection](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-012-rds-connect-from-ec2.png)
-*A shell on an instance with no SSH key and no open ports, connecting to a private database
-over a certificate-verified TLS connection.*
+![NetworkPolicy block](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-012-networkpolicy-block.png)
+*An unrelated pod trying to reach Redis: connection timed out. The API, which carries the
+allowed label, still connects fine.*
 
-That connection is worth reading as proof of the whole design. My laptop cannot reach that
-database at all, no route exists. The app server can, because its security group badge is on
-the database's guest list.
+Redis now accepts traffic from pods labelled `app: clearops-api` and from nothing else.
+That is the same chained isolation as the Module 9 security groups, where the database only
+accepted the app servers' security group, here enforced by labels instead of IPs. And the
+same lesson applies: the moment a policy selects a pod it switches to deny-by-default, so a
+policy that forgets to allow the traffic you need takes your own app down.
 
-One small practical note: Amazon Linux ships the MariaDB client, which uses
-`--ssl-verify-server-cert` rather than MySQL's `--ssl-mode=VERIFY_IDENTITY`. Same
-intent, different spelling, and an easy few minutes to lose.
+## Packaging: two ways
 
-## Object storage
+**Helm** packages the manifests into a chart with the changeable values pulled into
+variables, and tracks each deploy as a versioned release with one-command rollback of the
+whole thing at once.
 
-Files moved off the app servers' local disks into S3. With two servers, local storage was
-already broken: a file uploaded to one was simply absent from the other. Object storage is
-shared, durable, and has no capacity to manage.
+![Helm release](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-013-helm-release.png)
+*A Helm release through install, upgrade, and rollback, with the revision number climbing.*
 
-Versioning is enabled, so an overwrite or delete keeps the previous copy. All four public
-access blocks are on. Publicly readable buckets are one of the most famous causes of data
-exposure in the industry, and the correct pattern for genuinely public files is a CDN
-reading from a sealed bucket rather than opening the bucket itself.
+**Kustomize** does the opposite: plain readable YAML with small patches layered per
+environment, no templating, built into kubectl.
 
-![Bucket settings](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-013-s3-bucket-settings.png)
-*Versioning on, all public access blocked.*
+![Kustomize overlays](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-014-kustomize-overlays.png)
+*One base, a dev overlay and a prod overlay differing only by the fields their patches name.*
 
-![Upload via role](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-014-s3-upload-via-role.png)
-*A file uploaded from an app server with no credentials configured anywhere. The role
-supplied them.*
+The trade, which is a real interview question: Helm gives you release tracking and rollback
+but its templated files are not valid YAML on their own; Kustomize files are plain and
+apply without rendering but it has no release history. Helm for installing third-party
+software where charts exist, Kustomize for your own apps where you want readable manifests.
+Plenty of teams use both.
 
-## Cost discipline
+## Debugging
 
-Cloud resources bill for existing, not for being used. An idle NAT gateway costs the same as
-a busy one, roughly a dollar a day. So the budget alarm was the first thing created in this
-module, before any resource existed, and every resource was tagged on creation.
+The most immediately useful skill in the module. The pod STATUS tells you the category of
+failure; `kubectl describe` Events tell you the specific cause; logs only help once a
+container has started. I broke the deployment on purpose to practise the sequence:
 
-![Billing alarm](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/09-cloud-fundamentals/screenshots/m09-aws-001-billing-alarm.png)
-*The budget alarm, created before anything else.*
+![Debug events](https://raw.githubusercontent.com/vivianokose/nexaops-operations-lab/main/10-kubernetes/screenshots/m10-k8s-015-debug-events.png)
+*A deliberate bad-image break. The Events section names the cause in one line:
+ErrImageNeverPull, the image is not present and the policy says do not pull.*
 
-Teardown is documented in `runbooks/aws-teardown.md`, and the order in it is not
-decorative. AWS refuses to delete resources other resources depend on, so the runbook goes in
-reverse dependency order. Testing it found a real gap: deleting the VPC failed because the
-NAT gateway and its network interface had to go first and individually. An untested teardown
-runbook fails at exactly that point in real life too.
-
-## Scope note
-
-The optional CI/CD stage, deploying to these instances from Jenkins via SSM Send-Command,
-was left as a documented design rather than built. Automated deployment was demonstrated end
-to end in Module 8, and standing up a fresh Jenkins server here would have added hours and
-running cost to show a variation on a proven capability. The pattern is recorded in
-`retro.md`.
+The full seven-step sequence is written up in `runbooks/k8s-debug.md`.
 
 ## What this module covers
 
-- VPC design with public and private subnets across two availability zones
-- Route tables, internet gateway, and NAT gateway, and what actually makes a subnet public
-- Security groups chained by group reference rather than IP address
-- An Application Load Balancer with health checks across two zones
-- RDS MySQL in private subnets, unreachable from the internet
-- IAM roles and least-privilege policies, with no stored credentials
-- S3 with versioning and public access blocked
-- SSM Session Manager for shell access with zero inbound ports
-- Budgets, tagging, and a tested teardown runbook
+- A local cluster, and the control plane's reconcile loop that keeps desired = actual
+- Pods, Deployments, ReplicaSets, and why you never create pods directly
+- Services (ClusterIP, NodePort), cluster DNS, and labels/selectors as the glue
+- Namespaces for organising a shared cluster
+- Liveness and readiness probes; resource requests and limits
+- Self-healing and horizontal autoscaling, both demonstrated
+- Rolling updates and rollback, and why git is the real source of truth
+- ConfigMaps and Secrets (and that Secrets are encoded, not encrypted)
+- StatefulSets with persistent storage, proven to survive pod deletion
+- NetworkPolicy for pod-to-pod isolation
+- Packaging with Helm and with Kustomize, and when to use each
+- A debug runbook for CrashLoopBackOff, ImagePullBackOff, Pending, OOMKilled, and probe failures
