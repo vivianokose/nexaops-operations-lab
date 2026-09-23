@@ -1,0 +1,38 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: clearops-eks
+  region: us-east-1
+  version: "1.32"
+  tags:
+    Project: clearops
+    Env: dev
+    Owner: vivian
+    Module: "11"
+
+vpc:
+  cidr: "10.30.0.0/16"
+  nat:
+    gateway: Single
+
+iam:
+  withOIDC: true
+
+managedNodeGroups:
+  - name: ng-small
+    instanceType: t3.small
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 3
+    volumeSize: 20
+    privateNetworking: true
+    tags:
+      Project: clearops
+      Env: dev
+
+addons:
+  - name: vpc-cni
+  - name: kube-proxy
+  - name: coredns
+  - name: aws-ebs-csi-driver
