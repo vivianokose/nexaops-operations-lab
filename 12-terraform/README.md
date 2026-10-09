@@ -13,6 +13,26 @@ that live in git, reviewed in pull requests, and created or destroyed with a sin
 *The StackForge stack built from Terraform modules, with state stored remotely in S3 and
 locked with DynamoDB, plus an EKS cluster provisioned from the community module.*
 
+## Security scanning in CI (and what it found)
+
+The pipeline runs two security scanners on every pull request that touches a `.tf` file: **tfsec** and **checkov**. Both run in `soft_fail` mode, which means they report every finding as an annotation on the PR but do not block the merge. That is deliberate. On a learning build I want to *see* what a production reviewer would flag without having a half-finished lab wedged behind a red check.
+
+A green pipeline with security annotations is the normal, healthy state here. The job passing means the code is valid and formatted. The annotations are a separate thing: a running list of how this stack would be hardened before it carried real traffic.
+
+Here is what the scan surfaced, and what I would actually do about each one.
+
+| Finding | What it means in plain terms | Decision for this lab |
+|---|---|---|
+| `CKV_AWS_79` IMDSv1 still allowed | The instance metadata service can be reached the old, less safe way. Forcing IMDSv2 closes a known path that has been used to steal instance credentials. | Real hardening item. In production I would set `http_tokens = "required"` on the instance metadata options. Left open here only because the instances are torn down the same session. |
+| `CKV_AWS_8` EBS volume not explicitly encrypted | The root disk is not set to encrypt at rest in code. | Real item. I would set `encrypted = true` on the block device, or turn on account-level default EBS encryption so every volume gets it without relying on each template. |
+| `CKV_TF_1` module source not pinned to a commit hash | The EKS and VPC community modules are pinned to a version tag, not a specific commit SHA. A tag can in theory be moved; a SHA cannot. | Supply-chain hardening. For anything long-lived I would pin to a commit hash so the module content can never change under me between runs. |
+| `CKV_AWS_126` detailed monitoring not enabled | One-minute CloudWatch metrics instead of the default five-minute. | Skipped on purpose. It bills extra and adds nothing on a short-lived t3.micro. |
+| `CKV_AWS_135` instance not EBS-optimized | A throughput tuning flag for disk-heavy instances. | Not relevant at this instance size. |
+
+Each EC2 finding appears twice in the annotations because the compute module builds two instances with `count`, so both trip the same check. That repetition is a useful sanity signal on its own: it confirms the scanner is reading every resource the module actually produces, not just the first one.
+
+The point of this section is the honest part: the scanners found genuine things, I read them, and I made a call on each rather than either ignoring the output or pretending the lab is production-grade. That judgment is the actual skill. Running a scanner is easy. Knowing which of its findings matter for the situation in front of you is the part that takes understanding.
+
 ## The shift: describe, do not click
 
 Every tool before this touched AWS directly, the console, the CLI, eksctl. What you built
