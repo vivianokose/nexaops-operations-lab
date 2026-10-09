@@ -21,3 +21,5 @@ provider "aws" {
     }
   }
 }
+
+# ci: terraform validation workflow added for this module
