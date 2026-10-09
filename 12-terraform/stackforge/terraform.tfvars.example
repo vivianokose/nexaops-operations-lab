@@ -1,0 +1,3 @@
+environment = "dev"
+owner       = "your-name"
+db_password = "REPLACE_WITH_STRONG_PASSWORD"
