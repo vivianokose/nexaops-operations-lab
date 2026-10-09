@@ -3,8 +3,8 @@ resource "aws_iam_policy" "s3_read" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:ListBucket"]
+      Effect = "Allow"
+      Action = ["s3:GetObject", "s3:ListBucket"]
       Resource = [
         "arn:aws:s3:::stackforge-assets-948102249482-dev",
         "arn:aws:s3:::stackforge-assets-948102249482-dev/*"
