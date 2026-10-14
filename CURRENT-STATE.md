@@ -11,6 +11,12 @@ and carry on from "Immediate next step" below.
 
 ---
 
+## Repo (always carried with every state)
+github.com/vivianokose/nexaops-operations-lab
+- Main portfolio repo. Protected main; all changes via branch, PR, squash-merge.
+- INFRASTRUCTURE-LOG.md and this file both live at the repo root.
+- Separate repos (Module 8 exceptions): voyageai-booking-api, jenkins-shared-lib.
+
 ## Last updated
 2026-10-14
 
