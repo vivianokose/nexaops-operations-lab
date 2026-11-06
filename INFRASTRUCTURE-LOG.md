@@ -220,3 +220,38 @@ ALL AWS RESOURCES DESTROYED, state backend deleted by hand, account verified cle
 - github.com/vivianokose/jenkins-shared-lib (Module 8 reusable pipeline library)
 
 Everything else lives inside nexaops-operations-lab under its module folder.
+
+## Module 12.5: GitOps with ArgoCD (folder 12.5-gitops-argocd)
+
+**Status:** COMPLETE, documented, torn down (6 November 2026). Content not yet published.
+
+**Where it ran:** local Minikube in WSL (Docker driver, 4GB, 2 CPUs, Kubernetes v1.37.0, metrics-server). No cloud, no cost. WSL raised to 10GB RAM + 4GB swap via `C:\Users\chiam\.wslconfig` (left in place).
+
+**Built**
+- ArgoCD v3.5.6 (server and CLI pinned; CLI checksum-verified). Admin password rotated, initial Secret deleted. Local `viewer` account with role:readonly, empty policy.default.
+- Config repo **github.com/vivianokose/clearops-gitops** (public): Kustomize base + dev/staging overlays for ClearOps; sync waves; PostSync smoke-test hook; AppProjects `clearops` and `platform`; App of Apps `root` (prune off); ApplicationSet (git directory generator, preserveResourcesOnDeletion); notifications posting GitHub commit statuses.
+- App repo **github.com/vivianokose/clearops-app** (public): services + Jenkinsfile. API version baked in at build time; unknown paths now return 404.
+- Jenkins 2.580.2 in Docker on the laptop (127.0.0.1:8090, Docker socket mounted, documented risk). Pipeline: pinned GitHub host key, version from rendered dev overlay, skip published tags, hadolint, build, /health version test, push, `kustomize edit set image` + commit to clearops-gitops via a one-repo deploy key. No deploy stage, no cluster credentials.
+- Sealed Secrets v0.41.2 (controller via kubectl). Redis requires a password from a per-namespace SealedSecret.
+- Images on Docker Hub **crystalvivian**: clearops-api and clearops-frontend 1.0.x to 1.2.0.
+
+**Proven**
+- Drift reverted by self-heal in about 2 seconds; prune removed a retired ConfigMap; Redis PVC not ArgoCD-managed so prune-safe.
+- Real bad release 1.1.1 (`d3478e1`, 0 records) rolled back with `git revert` (`b2f5e65`); fix shipped as 1.1.2 (`505a6ac`) after the tag guard skipped 1.1.1.
+- Promotion dev to staging by PR #1. App of Apps children handed to an ApplicationSet with zero pod restarts.
+- Commit statuses on GitHub for deployed commits.
+
+**Incidents worth remembering**
+- First sync failed: HPA Degraded (no metrics on a new pod) blocked later waves. Fixed with syncPolicy.retry.
+- Jenkins build produced tag `..1` (version parser broken by a `newName` line). Fixed by reading the rendered overlay and validating.
+- Emptying `argocd/apps` in one commit gave "app path does not exist"; ArgoCD refused to act. Add and remove in one commit.
+- A GitHub token was printed on screen (pasted in place of the prompt). Revoked, history scrubbed, replaced.
+- Wildcard copy pushed 50 stray screenshots to the public repo (no live secret). Removed in PR #40. Copy by name pattern; secret scanners can't read images.
+
+**Teardown (6 November 2026)**
+- `docker compose down -v` (Jenkins and its credential volume deleted), `minikube delete --all`.
+- Deploy key removed from clearops-gitops; Docker Hub token, GitHub commit-status token and the exposed token deleted.
+- Docker images, build caches and 21 unused volumes pruned (about 5GB inside WSL). Kept volumes: swiftmove_mysql_data, vault-stack_pg_data, vault-stack_redis_data, vscode.
+- Sealed files in clearops-gitops cannot be decrypted any more (key died with the cluster). Reseal on rebuild.
+
+**Docs:** 12.5-gitops-argocd/README.md, architecture.png/.svg, runbooks/gitops-rollback.md, jenkins/, final-state.txt, 26 screenshots (PRs #39, #40, plus the diagram PR).
