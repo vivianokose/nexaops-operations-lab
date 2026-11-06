@@ -1,0 +1,47 @@
+== Captured Fri Nov  6 22:18:09 WAT 2026
+== Versions
+argocd: v3.5.6+c2b1e30
+kubeseal version: 0.41.2
+v5.3.0
+  <version>2.580.2</version>
+== ArgoCD apps
+NAME                                       SYNC STATUS   HEALTH STATUS
+application.argoproj.io/clearops-dev       Synced        Healthy
+application.argoproj.io/clearops-staging   Synced        Healthy
+application.argoproj.io/root               Synced        Healthy
+
+NAME                                  AGE
+applicationset.argoproj.io/clearops   7h45m
+== Running images
+NS        NAME                IMAGE
+dev       clearops-api        crystalvivian/clearops-api:1.2.0
+dev       clearops-frontend   crystalvivian/clearops-frontend:1.2.0
+staging   clearops-api        crystalvivian/clearops-api:1.1.2
+staging   clearops-frontend   crystalvivian/clearops-frontend:1.1.2
+== clearops-gitops history
+938f08d chore(dev): bump clearops to 1.2.0
+1d2858a feat: report deploys to github as commit statuses
+c3f24f8 feat: require a redis password from sealed secrets in dev and staging
+98652ad feat: generate clearops applications from overlay folders
+27452e7 refactor: hand clearops applications over to an applicationset
+2dfd3ff Merge pull request #1 from vivianokose/promote/staging-1.1.2
+a091e80 chore(staging): promote clearops 1.1.2
+d4935b5 feat: add app of apps root, platform project and staging app
+505a6ac chore(dev): bump clearops to 1.1.2
+b2f5e65 Revert "chore(dev): bump clearops to 1.1.1"
+d3478e1 chore(dev): bump clearops to 1.1.1
+8e52b8d chore(dev): bump clearops to 1.1.0
+4de7e58 feat: enable prune for clearops-dev
+a07f16d chore: retire feature-flags configmap from dev
+6168085 feat: add feature-flags configmap to dev
+7abbe6f feat: enable self-heal for clearops-dev
+bc18e34 feat: enable automated sync with retry for clearops-dev
+e83326e feat: add clearops base, dev and staging overlays, and argocd project
+== clearops-app history
+fe969ec feat: report region in data endpoint
+e665a2a fix: default record count to 42 when not configured
+9d353fe chore(ci): never reuse a published image tag
+b11fe86 fix(ci): read deployed version from rendered overlay
+1f5defe fix: read record count from config
+40b963e feat: add gitops ci pipeline
+71280e1 feat: initial clearops app with build-time version
