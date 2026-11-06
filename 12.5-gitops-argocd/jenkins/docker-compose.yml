@@ -1,0 +1,20 @@
+services:
+  jenkins:
+    build: .
+    image: clearops-jenkins:local
+    container_name: clearops-jenkins
+    ports:
+      # 127.0.0.1 only: reachable from this laptop, not from your network.
+      # 8090, because 8080 is already used by the ArgoCD port-forward.
+      - "127.0.0.1:8090:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home          # jobs, credentials, history survive restarts
+      - /var/run/docker.sock:/var/run/docker.sock  # lets Jenkins build images (see note in the lab)
+    group_add:
+      - "${DOCKER_GID}"                         # the docker group's ID on this machine, from .env
+    environment:
+      JAVA_OPTS: "-Xmx768m"
+    mem_limit: 1536m                            # keeps Jenkins from crowding out Minikube
+    restart: unless-stopped
+volumes:
+  jenkins_home:
